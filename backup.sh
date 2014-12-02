@@ -1,5 +1,13 @@
 #!/bin/bash
 
+# Used for a regular back-up from a server to a local PC. You should run this script from the PC client that the data will be copied and NOT from the server. 
+# It is advisable to have ssh without login from the client PC to the server. 
+# Call like this: ./backup.sh "[project_name_[folder]]" "" "[path_in_the_sever_to_be_copied]" "[path_in_the_local_machine_that_script_will_be_executed]" "[username]@[IP]:" "[dummy_mail]" "" "" [optional_arg]
+#
+#
+# Copyright (C) 2014 Grigorios G. Chrysos
+# available under the terms of the Apache License, Version 2.0
+
 #Backup name
 if [ -n "$1" ]; then
     BACKUP_NAME=$1  # Name of backup (log file, dest dir, exclude)
@@ -60,7 +68,7 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 DST="$BACKUP_REPO$BACKUP_NAME"
 EXCLUDE="$DIR/$BACKUP_NAME.exclude"
 LOG="$DIR/$BACKUP_NAME.log"
-RSYNC_PATH="sudo /usr/bin/rsync"
+RSYNC_PATH=" /usr/bin/rsync"
 
 DATE=`date +%Y-%m-%d`   # Full date 2012-12-31
 DOW=`date +%w`          # Day of the week 1 is Monday
@@ -100,16 +108,27 @@ elif [ $DOW = "5" ]; then
 else
 	DATE_DST=$DST/Daily/`date +%A`
 fi
-
+echo $DST
 # Execute the rsync task
-rsync -e "$SSH_COMMAND" --rsync-path="$RSYNC_PATH" -az --numeric-ids --stats --human-readable --delete --exclude-from "$EXCLUDE" --delete-excluded --link-dest=$DST/current $SRC $DST/incomplete > $LOG 2>&1 && cat $LOG | mail -s "Rsync $BACKUP_NAME: success" $EMAIL || cat $LOG | mail -s "Rsync $BACKUP_NAME: failed" $EMAIL
-
-# Delete existing destination directory
-if [ -d "$DATE_DST" ]; then
+if [ -n "$5" ]; then
+    rsync -azv  $SSH_COMMAND$SRC $DST/incomplete > $LOG 2>&1 && cat $LOG || cat $LOG #| mail -s "Rsync $BACKUP_NAME: success" $EMAIL || cat $LOG | mail -s "Rsync $BACKUP_NAME: failed" $EMAIL
+else
+echo $SSH_COMMAND
+   rsync -e --rsh="$SSH_COMMAND" --rsync-path="$RSYNC_PATH" -az --numeric-ids --stats --human-readable --delete --exclude-from "$EXCLUDE" --delete-excluded --link-dest=$DST/current $SRC $DST/incomplete > $LOG 2>&1 && cat $LOG || cat $LOG
+fi
+if [ -n "$9" ]; then 				# optional arg: If provided, then saves the files in a directory based on the time
+    THETIME=`date +%y%m%d_%H%M`  		# file format: %year%month%day_%time
+    BY_TIME='BY_TIME'
+    mkdir -p $DST/$BY_TIME
+    mkdir -p $DST/$BY_TIME/$THETIME
+    DATE_DST=$DST/$BY_TIME'/'$THETIME
+    BT='/*'
+elif [ -d "$DATE_DST" ]; then   		# Delete existing destination directory.
     rm -rf $DATE_DST
+    BT=''
 fi
 
 # Move backup to destination and setup new reference directory 
-mv $DST/incomplete $DATE_DST
+mv $DST/incomplete$BT $DATE_DST
 rm -rf $DST/current 
 ln -s $DATE_DST $DST/current
